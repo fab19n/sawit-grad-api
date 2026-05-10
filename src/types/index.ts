@@ -1,7 +1,10 @@
 import { Request } from 'express';
 
-// Extends the standard Express Request to include our authenticated user
-// After the auth middleware runs, req.user will always be populated
+// We extend Express's Request interface rather than creating a new one
+// from scratch. This means AuthRequest has ALL the standard Request
+// properties (body, query, params, headers, etc.) plus our custom
+// user property. The ? means user is optional — before the protect
+// middleware runs, req.user doesn't exist yet.
 export interface AuthRequest extends Request {
   user?: {
     id:     string;

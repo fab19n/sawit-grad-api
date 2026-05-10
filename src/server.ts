@@ -69,23 +69,16 @@ async function connectDB(): Promise<void> {
   try {
     const uri = process.env.MONGODB_URI!;
     await mongoose.connect(uri, {
-      // These two options tell Mongoose to use the newer
-      // URL parser and server discovery engine, which are
-      // more reliable and handle Atlas cluster topology changes
-      // (like automatic failover) more gracefully
-      serverSelectionTimeoutMS: 5000,  // Give up trying to connect after 5 seconds
-      socketTimeoutMS: 45000,          // Close sockets after 45 seconds of inactivity
-      maxPoolSize: 10,                 // Maintain up to 10 socket connections
-      // For a mobile app with bursts of activity (graders uploading
-      // at shift change), a pool size of 10 is more than sufficient
-    });
+      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS:          45000,
+      maxPoolSize:              10,
+    } as mongoose.ConnectOptions);  // explicit cast resolves the type conflict
     console.log('✅ MongoDB connected');
   } catch (err) {
     console.error('❌ MongoDB connection error:', err);
     process.exit(1);
   }
 }
-
 // ── Start server ──────────────────────────────────────────────────────────────
 
 connectDB().then(() => {
