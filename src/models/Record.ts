@@ -45,6 +45,14 @@ export interface IRecord extends Document {
   // Audit trail — when was this record created on the device vs synced to server
   deviceCreatedAt: Date;
   syncedAt:        Date;
+  isEdited:    boolean;
+  editCount:   number;
+  editedAt:    Date | null;
+  editHistory: {
+    editedAt:   Date;
+    editedBy:   string;  // user email for audit trail
+    editCount:  number;
+  }[];
 }
 
 const RecordSchema = new Schema<IRecord>({
@@ -81,6 +89,15 @@ const RecordSchema = new Schema<IRecord>({
   photos:          [{ type: String }],
   deviceCreatedAt: { type: Date, required: true },
   syncedAt:        { type: Date, default: Date.now },
+  isEdited:    { type: Boolean, default: false },
+  editCount:   { type: Number, default: 0 },
+  editedAt:    { type: Date, default: null },
+  editHistory: [{
+    editedAt:  { type: Date },
+    editedBy:  { type: String },
+    editCount: { type: Number },
+    _id: false,
+  }],
 }, { timestamps: true });
 
 // Compound index — ensures no duplicate serialNo within the same mill

@@ -4,7 +4,7 @@ import { AuthRequest, GradingRecordData } from '../types';
 
 export const syncRecords = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { records } = req.body as { records: GradingRecordData[] };
+    const { records } = req.body as { records: (GradingRecordData & { isEdited?: boolean; editCount?: number; editedAt?: string })[] };
     if (!Array.isArray(records) || records.length === 0) {
       res.status(400).json({ success: false, message: 'Tiada rekod untuk disegerakkan.' });
       return;
@@ -58,7 +58,20 @@ export const syncRecords = async (req: AuthRequest, res: Response): Promise<void
               photos:         (record.photos || []).filter(Boolean) as string[],
               deviceCreatedAt: new Date(record.createdAt),
               syncedAt:        new Date(),
+              isEdited:  record.isEdited  ?? false,
+              editCount: record.editCount ?? 0,
+              editedAt:  record.editedAt  ? new Date(record.editedAt) : null,
             },
+            // Only push to editHistory if this is an edit (not first sync)
+            ...(record.isEdited ? {
+              $push: {
+                editHistory: {
+                  editedAt:  new Date(record.editedAt || Date.now()),
+                  editedBy:  req.user!.email,
+                  editCount: record.editCount ?? 1,
+                }
+              }
+            } : {}),
           },
           { upsert: true }
         );

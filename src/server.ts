@@ -12,7 +12,7 @@ import authRoutes    from './routes/auth';
 import recordRoutes  from './routes/records';
 
 const app  = express();
-const PORT = process.env.PORT || 5000;
+const PORT = parseInt(process.env.PORT || '5000', 10);
 
 // ── Security middleware ──────────────────────────────────────────────────────
 
@@ -82,7 +82,7 @@ async function connectDB(): Promise<void> {
 // ── Start server ──────────────────────────────────────────────────────────────
 
 connectDB().then(() => {
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`🚀 SawitGrad API running on port ${PORT}`);
     console.log(`📋 Environment: ${process.env.NODE_ENV}`);
   });
