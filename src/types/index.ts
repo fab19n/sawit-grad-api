@@ -51,4 +51,7 @@ export interface GradingRecordData {
   namaPemandu:    string;
   photos:         (string | null)[];
   createdAt:      string;
+  editedAt?:      string | null;
+  editCount?:     number;
+  isEdited?:      boolean;
 }

@@ -2,9 +2,41 @@ import { Response } from 'express';
 import Record from '../models/Record';
 import { AuthRequest, GradingRecordData } from '../types';
 
+// ── Module-level constants — accessible by all functions ──────────────────
+const TRACKED_FIELDS = [
+  'namaLesen', 'noLesenMPOB', 'noKenderaan', 'noTiketTimbang',
+  'bilanganSampel', 'beratBersih', 'purataBerat', 'boer', 'bker',
+  'tandanMasak', 'tandanMengkal', 'tandanBusuk', 'tandanKosong',
+  'tandanKotor', 'tandanLama', 'tandanDura', 'tandanTangkai',
+  'partenokarpi', 'goer', 'catatan', 'namaPenggred', 'namaPemandu',
+];
+
+function computeDiff(
+  oldDoc: any,
+  newData: any
+): { oldValues: Record<string, any>; newValues: Record<string, any> } {
+  const oldValues: Record<string, any> = {};
+  const newValues: Record<string, any> = {};
+
+  for (const field of TRACKED_FIELDS) {
+    const oldVal = oldDoc?.[field];
+    const newVal = newData[field];
+    const oldStr = JSON.stringify(oldVal ?? null);
+    const newStr = JSON.stringify(newVal ?? null);
+    if (oldStr !== newStr) {
+      oldValues[field] = oldVal ?? null;
+      newValues[field] = newVal ?? null;
+    }
+  }
+
+  return { oldValues, newValues };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export const syncRecords = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
-    const { records } = req.body as { records: (GradingRecordData & { isEdited?: boolean; editCount?: number; editedAt?: string })[] };
+    const { records } = req.body as { records: GradingRecordData[] };
     if (!Array.isArray(records) || records.length === 0) {
       res.status(400).json({ success: false, message: 'Tiada rekod untuk disegerakkan.' });
       return;
@@ -12,69 +44,77 @@ export const syncRecords = async (req: AuthRequest, res: Response): Promise<void
 
     const millId    = req.user!.millId;
     const userId    = req.user!.id;
+    const userEmail = req.user!.email;
     const results   = { synced: 0, failed: 0, errors: [] as string[] };
 
     for (const record of records) {
       try {
-        // Use updateOne with upsert: true — if the record already exists
-        // (identified by serialNo + millId), update it. If not, insert it.
-        // This makes the sync operation idempotent — safe to call multiple times
-        // with the same data without creating duplicates.
+        // Fetch existing document BEFORE updating so we can compute the diff
+        const existing = await Record.findOne({ serialNo: record.id, millId }).lean();
+
+        // Compute field-level diff only when this is an edit of an existing record
+        let editEntry = null;
+        if (record.isEdited && existing) {
+          const { oldValues, newValues } = computeDiff(existing, record);
+          // Only create an edit entry if something actually changed
+          if (Object.keys(oldValues).length > 0) {
+            editEntry = {
+              editedAt:  new Date(record.editedAt || Date.now()),
+              editedBy:  userEmail,
+              editCount: record.editCount ?? 1,
+              oldValues,
+              newValues,
+            };
+          }
+        }
+
         await Record.updateOne(
           { serialNo: record.id, millId },
           {
             $set: {
               millId,
-              submittedBy:    userId,
-              serialNo:       record.id,
-              date:           record.date,
-              time:           record.time,
-              namaLesen:      record.namaLesen,
-              noLesenMPOB:    record.noLesenMPOB,
-              noKenderaan:    record.noKenderaan,
-              noTiketTimbang: record.noTiketTimbang,
-              bilanganSampel: record.bilanganSampel,
-              beratBersih:    record.beratBersih,
-              purataBerat:    record.purataBerat,
-              boer:           record.boer,
-              bker:           record.bker,
-              tandanMasak:    record.tandanMasak,
-              tandanMengkal:  record.tandanMengkal,
-              tandanBusuk:    record.tandanBusuk,
-              tandanKosong:   record.tandanKosong,
-              jumlahB:        record.jumlahB,
-              tandanKotor:    record.tandanKotor,
-              tandanLama:     record.tandanLama,
-              tandanDura:     record.tandanDura,
-              tandanTangkai:  record.tandanTangkai,
-              partenokarpi:   record.partenokarpi,
-              jumlahC:        record.jumlahC,
-              jumlahBesar:    record.jumlahBesar,
-              goer:           record.goer,
-              catatan:        record.catatan,
-              namaPenggred:   record.namaPenggred,
-              namaPemandu:    record.namaPemandu,
-              // Filter out null photo slots before storing
-              photos:         (record.photos || []).filter(Boolean) as string[],
+              submittedBy:     userId,
+              serialNo:        record.id,
+              date:            record.date,
+              time:            record.time,
+              namaLesen:       record.namaLesen,
+              noLesenMPOB:     record.noLesenMPOB,
+              noKenderaan:     record.noKenderaan,
+              noTiketTimbang:  record.noTiketTimbang,
+              bilanganSampel:  record.bilanganSampel,
+              beratBersih:     record.beratBersih,
+              purataBerat:     record.purataBerat,
+              boer:            record.boer,
+              bker:            record.bker,
+              tandanMasak:     record.tandanMasak,
+              tandanMengkal:   record.tandanMengkal,
+              tandanBusuk:     record.tandanBusuk,
+              tandanKosong:    record.tandanKosong,
+              jumlahB:         record.jumlahB,
+              tandanKotor:     record.tandanKotor,
+              tandanLama:      record.tandanLama,
+              tandanDura:      record.tandanDura,
+              tandanTangkai:   record.tandanTangkai,
+              partenokarpi:    record.partenokarpi,
+              jumlahC:         record.jumlahC,
+              jumlahBesar:     record.jumlahBesar,
+              goer:            record.goer,
+              catatan:         record.catatan,
+              namaPenggred:    record.namaPenggred,
+              namaPemandu:     record.namaPemandu,
+              photos:          (record.photos || []).filter(Boolean) as string[],
               deviceCreatedAt: new Date(record.createdAt),
               syncedAt:        new Date(),
-              isEdited:  record.isEdited  ?? false,
-              editCount: record.editCount ?? 0,
-              editedAt:  record.editedAt  ? new Date(record.editedAt) : null,
+              isEdited:        record.isEdited  ?? false,
+              editCount:       record.editCount ?? 0,
+              editedAt:        record.editedAt  ? new Date(record.editedAt) : null,
             },
-            // Only push to editHistory if this is an edit (not first sync)
-            ...(record.isEdited ? {
-              $push: {
-                editHistory: {
-                  editedAt:  new Date(record.editedAt || Date.now()),
-                  editedBy:  req.user!.email,
-                  editCount: record.editCount ?? 1,
-                }
-              }
-            } : {}),
+            // $push only fires when editEntry is not null
+            ...(editEntry ? { $push: { editHistory: editEntry } } : {}),
           },
           { upsert: true }
         );
+
         results.synced++;
       } catch (err: any) {
         results.failed++;
@@ -94,8 +134,6 @@ export const getRecords = async (req: AuthRequest, res: Response): Promise<void>
     const millId = req.user!.millId;
     const { page = 1, limit = 50, date } = req.query;
 
-    // Every query is scoped to millId — a grader from Mill A
-    // can never accidentally see Mill B's records
     const query: any = { millId };
     if (date) query.date = date;
 

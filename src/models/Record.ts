@@ -96,6 +96,8 @@ const RecordSchema = new Schema<IRecord>({
     editedAt:  { type: Date },
     editedBy:  { type: String },
     editCount: { type: Number },
+    oldValues: { type: Schema.Types.Mixed }, // Store the old values before edit for audit trail
+    newValues: { type: Schema.Types.Mixed }, // Store the new values after edit for audit trail
     _id: false,
   }],
 }, { timestamps: true });
