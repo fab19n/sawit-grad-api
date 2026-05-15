@@ -54,4 +54,13 @@ export interface GradingRecordData {
   editedAt?:      string | null;
   editCount?:     number;
   isEdited?:      boolean;
+  // Per-edit history entries built by the mobile app.
+  // Each entry represents one edit session with only the changed fields.
+  // The server will add editedBy from the JWT when processing.
+  editHistory?:   {
+    editedAt:  string;
+    editCount: number;
+    oldValues: Record<string, any>;
+    newValues: Record<string, any>;
+  }[];
 }

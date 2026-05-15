@@ -10,6 +10,7 @@ dotenv.config();
 
 import authRoutes    from './routes/auth';
 import recordRoutes  from './routes/records';
+import userRoutes    from './routes/users';
 
 const app  = express();
 const PORT = parseInt(process.env.PORT || '5000', 10);
@@ -48,6 +49,7 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 app.use('/api/auth',    authRoutes);
 app.use('/api/records', recordRoutes);
+app.use('/api/users',   userRoutes);
 
 // Health check endpoint — Render uses this to verify the service is alive
 app.get('/health', (_req, res) => {

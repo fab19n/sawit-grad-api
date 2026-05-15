@@ -49,24 +49,57 @@ export const syncRecords = async (req: AuthRequest, res: Response): Promise<void
 
     for (const record of records) {
       try {
-        // Fetch existing document BEFORE updating so we can compute the diff
-        const existing = await Record.findOne({ serialNo: record.id, millId }).lean();
+        // Fetch the existing MongoDB document so we know which editHistory
+        // entries have already been stored (by editCount).
+        const existing = await Record.findOne({ serialNo: record.id, millId }).lean() as any;
 
-        // Compute field-level diff only when this is an edit of an existing record
-        let editEntry = null;
-        if (record.isEdited && existing) {
+        // ── Determine new editHistory entries to push ──────────────────────
+        // The mobile app now builds editHistory locally (one entry per edit
+        // session).  We only push entries whose editCount is not already
+        // present in MongoDB, so re-syncing the same record is idempotent.
+        //
+        // Fallback: if the app has not sent editHistory (old app version) but
+        // the record is flagged as edited, fall back to the server-side diff
+        // so behaviour is unchanged for those older records.
+        let newEntries: any[] = [];
+
+        const clientHistory: any[] = (record as any).editHistory ?? [];
+
+        if (clientHistory.length > 0) {
+          // New path — use the per-edit diffs from the mobile app.
+          const existingCounts = new Set<number>(
+            (existing?.editHistory ?? []).map((e: any) => e.editCount)
+          );
+          newEntries = clientHistory
+            .filter((e: any) => !existingCounts.has(e.editCount))
+            .map((e: any) => ({
+              editedAt:  new Date(e.editedAt),
+              editedBy:  userEmail,          // always set from JWT — never trust client
+              editCount: e.editCount,
+              oldValues: e.oldValues,
+              newValues: e.newValues,
+            }));
+        } else if (record.isEdited && existing) {
+          // Legacy fallback — older app build without local editHistory.
+          // Compute a single diff exactly as before.
           const { oldValues, newValues } = computeDiff(existing, record);
-          // Only create an edit entry if something actually changed
           if (Object.keys(oldValues).length > 0) {
-            editEntry = {
-              editedAt:  new Date(record.editedAt || Date.now()),
-              editedBy:  userEmail,
-              editCount: record.editCount ?? 1,
-              oldValues,
-              newValues,
-            };
+            const existingCounts = new Set<number>(
+              (existing.editHistory ?? []).map((e: any) => e.editCount)
+            );
+            const editCount = record.editCount ?? 1;
+            if (!existingCounts.has(editCount)) {
+              newEntries = [{
+                editedAt:  new Date(record.editedAt || Date.now()),
+                editedBy:  userEmail,
+                editCount,
+                oldValues,
+                newValues,
+              }];
+            }
           }
         }
+        // ──────────────────────────────────────────────────────────────────
 
         await Record.updateOne(
           { serialNo: record.id, millId },
@@ -109,8 +142,9 @@ export const syncRecords = async (req: AuthRequest, res: Response): Promise<void
               editCount:       record.editCount ?? 0,
               editedAt:        record.editedAt  ? new Date(record.editedAt) : null,
             },
-            // $push only fires when editEntry is not null
-            ...(editEntry ? { $push: { editHistory: editEntry } } : {}),
+            // Push all new history entries in a single atomic operation.
+            // $each with an empty array is a no-op, so no guard needed.
+            $push: { editHistory: { $each: newEntries } },
           },
           { upsert: true }
         );
