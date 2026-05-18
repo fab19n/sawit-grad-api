@@ -1,12 +1,19 @@
 import { Router } from 'express';
-import { syncRecords, getRecords } from '../controllers/recordController';
-import { protect } from '../middleware/auth';
+import {
+  syncRecords,
+  getRecords,
+  getLiteRecords,
+  getConflicts,
+  resolveConflict,
+} from '../controllers/recordController';
+import { protect, requireRole } from '../middleware/auth';
 
 const router = Router();
 
-// All record routes require authentication
-// The protect middleware runs first, then the controller
-router.post('/sync', protect, syncRecords);
-router.get('/',     protect, getRecords);
+router.post('/sync',                  protect, syncRecords);
+router.get('/',                       protect, getRecords);
+router.get('/lite',                   protect, getLiteRecords);
+router.get('/conflicts',              protect, requireRole('manager', 'admin'), getConflicts);
+router.patch('/:id/resolve-conflict', protect, requireRole('manager', 'admin'), resolveConflict);
 
 export default router;
